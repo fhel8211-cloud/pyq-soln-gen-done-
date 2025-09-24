@@ -19,6 +19,7 @@ interface Question {
   answer: string | null;
   solution: string | null;
   topics: { notes: string | null } | null; // Nested topic notes
+  updated_at?: string;
 }
 
 export default function SolutionMakerPage() {
@@ -26,6 +27,9 @@ export default function SolutionMakerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'unsolved' | 'solved'>('unsolved');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [questionsPerPage] = useState(5);
 
   useEffect(() => {
     fetchQuestions();
@@ -37,8 +41,8 @@ export default function SolutionMakerPage() {
     try {
       const { data, error } = await clientSupabase
         .from('questions_topic_wise')
-        .select('*, topics(notes)') // Select question data and nested topic notes
-        .order('created_at', { ascending: false }); // Assuming a created_at column for ordering
+        .select('*, topics(notes)')
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
@@ -55,6 +59,8 @@ export default function SolutionMakerPage() {
   const generateSolution = async (questionId: string) => {
     setGeneratingId(questionId);
     try {
+      console.log('Starting solution generation for question:', questionId);
+      
       const response = await fetch('/api/generate-solution', {
         method: 'POST',
         headers: {
@@ -65,7 +71,8 @@ export default function SolutionMakerPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate solution');
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to generate solution`);
       }
 
       const result = await response.json();
@@ -75,14 +82,37 @@ export default function SolutionMakerPage() {
       setQuestions((prevQuestions) =>
         prevQuestions.map((q) => (q.id === questionId ? { ...q, ...result.question } : q))
       );
+      
+      // Show success message
+      alert('Solution generated successfully! ✅');
+      
     } catch (err: any) {
       console.error('Error generating solution:', err.message);
-      alert(`Error generating solution: ${err.message}`);
+      alert(`❌ Error generating solution: ${err.message}`);
     } finally {
       setGeneratingId(null);
     }
   };
 
+  // Filter questions based on current filter
+  const filteredQuestions = questions.filter(question => {
+    switch (filter) {
+      case 'solved':
+        return question.answer && question.solution;
+      case 'unsolved':
+        return !question.answer || !question.solution;
+      default:
+        return true;
+    }
+  });
+
+  // Pagination
+  const indexOfLastQuestion = currentPage * questionsPerPage;
+  const indexOfFirstQuestion = indexOfLastQuestion - questionsPerPage;
+  const currentQuestions = filteredQuestions.slice(indexOfFirstQuestion, indexOfLastQuestion);
+  const totalPages = Math.ceil(filteredQuestions.length / questionsPerPage);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-text">
@@ -95,7 +125,15 @@ export default function SolutionMakerPage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-error p-8">
-        <p className="text-xl font-bold">Error: {error}</p>
+        <div className="text-center">
+          <p className="text-xl font-bold mb-4">❌ Error: {error}</p>
+          <button 
+            onClick={fetchQuestions}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -107,24 +145,90 @@ export default function SolutionMakerPage() {
           <span className="block animate-fade-in-down">PyQS Solution Maker</span>
         </h1>
         <p className="text-xl text-textSecondary max-w-3xl mx-auto animate-fade-in-up">
-          Effortlessly generate precise answers and detailed solutions for your questions using AI.
+          Generate precise answers and detailed solutions using Gemini 2.0 Flash AI.
         </p>
+        
+        {/* Statistics */}
+        <div className="mt-8 flex justify-center space-x-8 text-sm">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-primary">{questions.length}</div>
+            <div className="text-textSecondary">Total Questions</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-success">
+              {questions.filter(q => q.answer && q.solution).length}
+            </div>
+            <div className="text-textSecondary">Solved</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-warning">
+              {questions.filter(q => !q.answer || !q.solution).length}
+            </div>
+            <div className="text-textSecondary">Pending</div>
+          </div>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto">
-        {questions.length === 0 ? (
+        {/* Filter Controls */}
+        <div className="mb-8 flex justify-center space-x-4">
+          <button
+            onClick={() => { setFilter('all'); setCurrentPage(1); }}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              filter === 'all' ? 'bg-primary text-white' : 'bg-surface text-textSecondary hover:bg-border'
+            }`}
+          >
+            All Questions ({questions.length})
+          </button>
+          <button
+            onClick={() => { setFilter('unsolved'); setCurrentPage(1); }}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              filter === 'unsolved' ? 'bg-warning text-white' : 'bg-surface text-textSecondary hover:bg-border'
+            }`}
+          >
+            Unsolved ({questions.filter(q => !q.answer || !q.solution).length})
+          </button>
+          <button
+            onClick={() => { setFilter('solved'); setCurrentPage(1); }}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              filter === 'solved' ? 'bg-success text-white' : 'bg-surface text-textSecondary hover:bg-border'
+            }`}
+          >
+            Solved ({questions.filter(q => q.answer && q.solution).length})
+          </button>
+        </div>
+        {filteredQuestions.length === 0 ? (
           <div className="bg-surface p-8 rounded-xl shadow-lg text-center text-textSecondary">
-            <p className="text-2xl mb-4">No questions found.</p>
-            <p>Please add questions to your `questions_topic_wise` table in Supabase.</p>
+            <p className="text-2xl mb-4">
+              {questions.length === 0 ? 'No questions found.' : `No ${filter} questions found.`}
+            </p>
+            {questions.length === 0 && (
+              <p>Please add questions to your `questions_topic_wise` table in Supabase.</p>
+            )}
           </div>
         ) : (
           <div className="grid gap-8">
-            {questions.map((question) => (
+            {currentQuestions.map((question, index) => (
               <div
                 key={question.id}
-                className="bg-surface p-6 rounded-xl shadow-lg border border-border hover:border-primary transition-all duration-300 ease-in-out transform hover:-translate-y-1"
+                className={`bg-surface p-6 rounded-xl shadow-lg border transition-all duration-300 ease-in-out transform hover:-translate-y-1 ${
+                  question.answer && question.solution 
+                    ? 'border-success hover:border-success' 
+                    : 'border-border hover:border-primary'
+                }`}
               >
-                <h2 className="text-2xl font-semibold text-text mb-4">Question:</h2>
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-2xl font-semibold text-text">
+                    Question #{indexOfFirstQuestion + index + 1}
+                    {question.answer && question.solution && (
+                      <span className="ml-2 text-sm bg-success text-white px-2 py-1 rounded-full">✓ Solved</span>
+                    )}
+                  </h2>
+                  <div className="text-xs text-textSecondary">
+                    ID: {question.id.slice(0, 8)}...
+                  </div>
+                </div>
+                
                 <p className="text-lg text-textSecondary mb-4">{question.question_text}</p>
 
                 <div className="mb-4">
@@ -176,7 +280,7 @@ export default function SolutionMakerPage() {
                         Generating...
                       </>
                     ) : (
-                      'Generate Solution'
+                      question.answer && question.solution ? 'Regenerate Solution' : 'Generate Solution'
                     )}
                   </button>
                 </div>
@@ -185,23 +289,68 @@ export default function SolutionMakerPage() {
                   <div className="mt-6 pt-6 border-t border-border">
                     <h3 className="text-xl font-medium text-success mb-3">Generated Answer:</h3>
                     <div className="bg-background p-4 rounded-md border border-border mb-4">
-                      <InlineMath math={question.answer} />
+                      <div className="text-lg font-bold text-success">
+                        <InlineMath math={question.answer} />
+                      </div>
                     </div>
 
                     <h3 className="text-xl font-medium text-success mb-3">Generated Solution:</h3>
                     <div className="bg-background p-4 rounded-md border border-border prose prose-invert max-w-none">
-                      <BlockMath math={question.solution} />
+                      <div className="whitespace-pre-wrap text-textSecondary leading-relaxed">
+                        {question.solution}
+                      </div>
                     </div>
+                    
+                    {question.updated_at && (
+                      <div className="mt-2 text-xs text-textSecondary">
+                        Generated: {new Date(question.updated_at).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             ))}
           </div>
         )}
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-12 flex justify-center space-x-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-surface text-textSecondary rounded-lg hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
+              <button
+                key={number}
+                onClick={() => paginate(number)}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  currentPage === number
+                    ? 'bg-primary text-white'
+                    : 'bg-surface text-textSecondary hover:bg-border'
+                }`}
+              >
+                {number}
+              </button>
+            ))}
+            
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-surface text-textSecondary rounded-lg hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </main>
 
       <footer className="mt-16 text-center text-textSecondary text-sm">
-        <p>&copy; {new Date().getFullYear()} PyQS Solution Maker. Powered by Bolt & Gemini.</p>
+        <p>&copy; {new Date().getFullYear()} PyQS Solution Maker. Powered by Gemini 2.0 Flash.</p>
       </footer>
     </div>
   );
