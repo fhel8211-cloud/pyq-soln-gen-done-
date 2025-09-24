@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  @apply bg-background text-text font-sans;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for a sleek look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #262626; /* surface color */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #38bdf8; /* secondary color */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9E7FFF; /* primary color */
+}
+
+/* KaTeX specific styling to ensure it blends with the dark theme */
+.katex {
+  font-size: 1.1em;
+  color: #FFFFFF; /* text color */
+}
+.katex .base {
+  color: #FFFFFF;
+}
+.katex .strut {
+  color: #FFFFFF;
+}
+.katex .mord {
+  color: #FFFFFF;
+}
+.katex .mbin {
+  color: #FFFFFF;
+}
+.katex .mrel {
+  color: #FFFFFF;
+}
+.katex .mop {
+  color: #FFFFFF;
+}
+.katex .mord.text {
+  color: #FFFFFF;
+}
