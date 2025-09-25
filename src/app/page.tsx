@@ -13,12 +13,16 @@ interface Option {
 interface Question {
   id: string;
   topic_id: string;
+  part_id: string;
+  slot_id: string;
   question_text: string;
   options: Option[];
   correct_option_ids: string[];
   answer: string | null;
   solution: string | null;
-  topics: { notes: string | null } | null; // Nested topic notes
+  topics: { notes: string | null } | null;
+  parts: { name: string } | null;
+  slots: { name: string } | null;
   updated_at?: string;
 }
 
@@ -29,7 +33,7 @@ export default function SolutionMakerPage() {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'unsolved' | 'solved'>('unsolved');
   const [currentPage, setCurrentPage] = useState(1);
-  const [questionsPerPage] = useState(5);
+  const [questionsPerPage] = useState(3);
 
   useEffect(() => {
     fetchQuestions();
@@ -41,7 +45,12 @@ export default function SolutionMakerPage() {
     try {
       const { data, error } = await clientSupabase
         .from('questions_topic_wise')
-        .select('*, topics(notes)')
+        .select(`
+          *,
+          topics(notes),
+          parts(name),
+          slots(name)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -113,23 +122,26 @@ export default function SolutionMakerPage() {
   const totalPages = Math.ceil(filteredQuestions.length / questionsPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-text">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary"></div>
-        <p className="ml-4 text-lg">Loading questions...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-lg">Loading questions...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-error p-8">
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400 p-8">
         <div className="text-center">
           <p className="text-xl font-bold mb-4">❌ Error: {error}</p>
           <button 
             onClick={fetchQuestions}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent transition-colors"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Retry
           </button>
@@ -139,32 +151,32 @@ export default function SolutionMakerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-text p-8 lg:p-12">
+    <div className="min-h-screen bg-gray-900 text-white p-8">
       <header className="mb-12 text-center">
-        <h1 className="text-5xl font-extrabold text-primary mb-4 leading-tight tracking-tight">
-          <span className="block animate-fade-in-down">PyQS Solution Maker</span>
+        <h1 className="text-5xl font-extrabold text-blue-400 mb-4">
+          PyQS Solution Maker
         </h1>
-        <p className="text-xl text-textSecondary max-w-3xl mx-auto animate-fade-in-up">
-          Generate precise answers and detailed solutions using Gemini 2.0 Flash AI.
+        <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+          Generate precise answers and detailed solutions using Gemini 2.0 Flash AI
         </p>
         
         {/* Statistics */}
         <div className="mt-8 flex justify-center space-x-8 text-sm">
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{questions.length}</div>
-            <div className="text-textSecondary">Total Questions</div>
+            <div className="text-2xl font-bold text-blue-400">{questions.length}</div>
+            <div className="text-gray-400">Total Questions</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-success">
+            <div className="text-2xl font-bold text-green-400">
               {questions.filter(q => q.answer && q.solution).length}
             </div>
-            <div className="text-textSecondary">Solved</div>
+            <div className="text-gray-400">Solved</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-warning">
+            <div className="text-2xl font-bold text-yellow-400">
               {questions.filter(q => !q.answer || !q.solution).length}
             </div>
-            <div className="text-textSecondary">Pending</div>
+            <div className="text-gray-400">Pending</div>
           </div>
         </div>
       </header>
@@ -175,7 +187,7 @@ export default function SolutionMakerPage() {
           <button
             onClick={() => { setFilter('all'); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'all' ? 'bg-primary text-white' : 'bg-surface text-textSecondary hover:bg-border'
+              filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
             All Questions ({questions.length})
@@ -183,7 +195,7 @@ export default function SolutionMakerPage() {
           <button
             onClick={() => { setFilter('unsolved'); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'unsolved' ? 'bg-warning text-white' : 'bg-surface text-textSecondary hover:bg-border'
+              filter === 'unsolved' ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
             Unsolved ({questions.filter(q => !q.answer || !q.solution).length})
@@ -191,14 +203,15 @@ export default function SolutionMakerPage() {
           <button
             onClick={() => { setFilter('solved'); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filter === 'solved' ? 'bg-success text-white' : 'bg-surface text-textSecondary hover:bg-border'
+              filter === 'solved' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
             Solved ({questions.filter(q => q.answer && q.solution).length})
           </button>
         </div>
+
         {filteredQuestions.length === 0 ? (
-          <div className="bg-surface p-8 rounded-xl shadow-lg text-center text-textSecondary">
+          <div className="bg-gray-800 p-8 rounded-xl shadow-lg text-center text-gray-300">
             <p className="text-2xl mb-4">
               {questions.length === 0 ? 'No questions found.' : `No ${filter} questions found.`}
             </p>
@@ -211,49 +224,64 @@ export default function SolutionMakerPage() {
             {currentQuestions.map((question, index) => (
               <div
                 key={question.id}
-                className={`bg-surface p-6 rounded-xl shadow-lg border transition-all duration-300 ease-in-out transform hover:-translate-y-1 ${
+                className={`bg-gray-800 p-6 rounded-xl shadow-lg border transition-all duration-300 ${
                   question.answer && question.solution 
-                    ? 'border-success hover:border-success' 
-                    : 'border-border hover:border-primary'
+                    ? 'border-green-500' 
+                    : 'border-gray-600 hover:border-blue-500'
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-2xl font-semibold text-text">
-                    Question #{indexOfFirstQuestion + index + 1}
-                    {question.answer && question.solution && (
-                      <span className="ml-2 text-sm bg-success text-white px-2 py-1 rounded-full">✓ Solved</span>
-                    )}
-                  </h2>
-                  <div className="text-xs text-textSecondary">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-white mb-2">
+                      Question #{indexOfFirstQuestion + index + 1}
+                      {question.answer && question.solution && (
+                        <span className="ml-2 text-sm bg-green-600 text-white px-2 py-1 rounded-full">✓ Solved</span>
+                      )}
+                    </h2>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="bg-blue-600 text-white px-2 py-1 rounded">
+                        Part: {question.parts?.name || 'Unknown'}
+                      </span>
+                      <span className="bg-purple-600 text-white px-2 py-1 rounded">
+                        Slot: {question.slots?.name || 'Unknown'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400">
                     ID: {question.id.slice(0, 8)}...
                   </div>
                 </div>
                 
-                <p className="text-lg text-textSecondary mb-4">{question.question_text}</p>
+                <div className="bg-gray-700 p-4 rounded-lg mb-4">
+                  <p className="text-lg text-white">{question.question_text}</p>
+                </div>
 
                 <div className="mb-4">
-                  <h3 className="text-xl font-medium text-text mb-2">Options:</h3>
-                  <ul className="list-disc list-inside text-textSecondary space-y-1">
+                  <h3 className="text-xl font-medium text-white mb-2">Options:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {question.options.map((option) => (
-                      <li key={option.id}>
-                        <span className="font-bold text-primary">{option.id}:</span> {option.text}
-                      </li>
+                      <div key={option.id} className="bg-gray-700 p-3 rounded-lg">
+                        <span className="font-bold text-blue-400">{option.id}:</span> 
+                        <span className="text-gray-200 ml-2">{option.text}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
 
                 <div className="mb-6">
-                  <h3 className="text-xl font-medium text-text mb-2">Topic Notes:</h3>
-                  <p className="text-textSecondary italic text-sm bg-background p-3 rounded-md border border-border">
-                    {question.topics?.notes || 'No specific notes for this topic.'}
-                  </p>
+                  <h3 className="text-xl font-medium text-white mb-2">Topic Notes:</h3>
+                  <div className="bg-gray-700 p-3 rounded-lg border border-gray-600">
+                    <p className="text-gray-300 text-sm">
+                      {question.topics?.notes || 'No specific notes for this topic.'}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex justify-end mb-6">
                   <button
                     onClick={() => generateSolution(question.id)}
                     disabled={generatingId === question.id}
-                    className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-accent transition-colors duration-300 ease-in-out flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {generatingId === question.id ? (
                       <>
@@ -286,23 +314,23 @@ export default function SolutionMakerPage() {
                 </div>
 
                 {question.answer && question.solution && (
-                  <div className="mt-6 pt-6 border-t border-border">
-                    <h3 className="text-xl font-medium text-success mb-3">Generated Answer:</h3>
-                    <div className="bg-background p-4 rounded-md border border-border mb-4">
-                      <div className="text-lg font-bold text-success">
+                  <div className="mt-6 pt-6 border-t border-gray-600">
+                    <h3 className="text-xl font-medium text-green-400 mb-3">Generated Answer:</h3>
+                    <div className="bg-gray-700 p-4 rounded-lg border border-green-500 mb-4">
+                      <div className="text-lg font-bold text-green-400">
                         <InlineMath math={question.answer} />
                       </div>
                     </div>
 
-                    <h3 className="text-xl font-medium text-success mb-3">Generated Solution:</h3>
-                    <div className="bg-background p-4 rounded-md border border-border prose prose-invert max-w-none">
-                      <div className="whitespace-pre-wrap text-textSecondary leading-relaxed">
+                    <h3 className="text-xl font-medium text-green-400 mb-3">Generated Solution:</h3>
+                    <div className="bg-gray-700 p-4 rounded-lg border border-green-500">
+                      <div className="whitespace-pre-wrap text-gray-200 leading-relaxed">
                         {question.solution}
                       </div>
                     </div>
                     
                     {question.updated_at && (
-                      <div className="mt-2 text-xs text-textSecondary">
+                      <div className="mt-2 text-xs text-gray-400">
                         Generated: {new Date(question.updated_at).toLocaleString()}
                       </div>
                     )}
@@ -319,7 +347,7 @@ export default function SolutionMakerPage() {
             <button
               onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-surface text-textSecondary rounded-lg hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
@@ -330,8 +358,8 @@ export default function SolutionMakerPage() {
                 onClick={() => paginate(number)}
                 className={`px-4 py-2 rounded-lg transition-colors ${
                   currentPage === number
-                    ? 'bg-primary text-white'
-                    : 'bg-surface text-textSecondary hover:bg-border'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
                 {number}
@@ -341,7 +369,7 @@ export default function SolutionMakerPage() {
             <button
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-surface text-textSecondary rounded-lg hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>
@@ -349,7 +377,7 @@ export default function SolutionMakerPage() {
         )}
       </main>
 
-      <footer className="mt-16 text-center text-textSecondary text-sm">
+      <footer className="mt-16 text-center text-gray-400 text-sm">
         <p>&copy; {new Date().getFullYear()} PyQS Solution Maker. Powered by Gemini 2.0 Flash.</p>
       </footer>
     </div>

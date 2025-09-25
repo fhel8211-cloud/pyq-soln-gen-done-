@@ -15,6 +15,6 @@ export const model = genAI.getGenerativeModel({
     temperature: 0.1, // Low temperature for more consistent, accurate responses
     topK: 1,
     topP: 0.8,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
   },
 });
